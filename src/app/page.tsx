@@ -1,65 +1,104 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { CRTDropZone } from "@/components/upload/CRTDropZone";
+import { FileInfo } from "@/components/upload/FileInfo";
+import { DecodeAnimation } from "@/components/upload/DecodeAnimation";
+import { UploadError } from "@/components/upload/UploadError";
+import { Button } from "@/components/ui/button";
+import { loadAudioFile, type AudioLoadError } from "@/lib/audio/AudioLoader";
+import { buildWaveformPeaks } from "@/lib/audio/WaveformBuilder";
+import { useProjectStore } from "@/lib/state/projectStore";
+
+type LoadingState = "idle" | "decoding" | "analyzing";
+
+export default function UploadPage() {
+  const router = useRouter();
+  const { audioFile, audioDuration, setAudioFile, setWaveformPeaks } = useProjectStore();
+  const [loading, setLoading] = useState<LoadingState>("idle");
+  const [error, setError] = useState<AudioLoadError | null>(null);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      setError(null);
+      setLoading("decoding");
+
+      const result = await loadAudioFile(file);
+      if (!result.ok) {
+        setError(result.error);
+        setLoading("idle");
+        return;
+      }
+
+      setAudioFile(result.result.file, result.result.buffer);
+      setLoading("analyzing");
+
+      const peaks = buildWaveformPeaks(result.result.buffer);
+      setWaveformPeaks(peaks);
+      setLoading("idle");
+    },
+    [setAudioFile, setWaveformPeaks]
+  );
+
+  const handleContinue = () => {
+    router.push("/editor");
+  };
+
+  const handleRetry = () => {
+    setError(null);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="pixel-grid relative flex min-h-screen flex-col items-center justify-center gap-10 p-8">
+      {/* Title */}
+      <div className="flex flex-col items-center gap-3">
+        <h1 className="type-display text-foreground text-glow-phosphor">
+          Beat Canvas
+        </h1>
+        <p className="type-body text-muted-foreground">
+          Audio-reactive video clips, in your browser
+        </p>
+      </div>
+
+      {/* Main content area */}
+      {loading !== "idle" ? (
+        <DecodeAnimation stage={loading} />
+      ) : error ? (
+        <UploadError error={error} onRetry={handleRetry} />
+      ) : audioFile ? (
+        <div className="flex flex-col items-center gap-6">
+          <FileInfo
+            filename={audioFile.name}
+            duration={audioDuration}
+            fileSize={audioFile.size}
+          />
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError(null);
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "audio/*";
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file) handleFile(file);
+                };
+                input.click();
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              Choose Different File
+            </Button>
+            <Button onClick={handleContinue}>
+              Open Workspace
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      ) : (
+        <CRTDropZone onFileSelected={handleFile} />
+      )}
     </div>
   );
 }
