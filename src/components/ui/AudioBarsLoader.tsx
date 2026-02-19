@@ -8,13 +8,7 @@ interface AudioBarsLoaderProps {
 }
 
 const BAR_COUNT = 5;
-const CGA_COLORS = [
-  "var(--phosphor)",
-  "var(--cga-cyan)",
-  "var(--cga-magenta)",
-  "var(--cga-yellow)",
-  "var(--phosphor)",
-];
+const BAR_COLOR = "hsl(var(--foreground))";
 
 export function AudioBarsLoader({ size = "lg", className }: AudioBarsLoaderProps) {
   const isSmall = size === "sm";
@@ -36,10 +30,10 @@ export function AudioBarsLoader({ size = "lg", className }: AudioBarsLoaderProps
           style={{
             width: barWidth,
             height: barHeight,
-            backgroundColor: CGA_COLORS[i],
+            backgroundColor: BAR_COLOR,
             animationDelay: `${i * 0.12}s`,
             transformOrigin: "bottom",
-            boxShadow: `0 0 6px ${CGA_COLORS[i]}`,
+            boxShadow: `0 0 6px ${BAR_COLOR}`,
           }}
         />
       ))}

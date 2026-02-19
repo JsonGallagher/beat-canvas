@@ -64,7 +64,7 @@ export function CRTDropZone({ onFileSelected, disabled }: CRTDropZoneProps) {
       onDragLeave={handleDragLeave}
       disabled={disabled}
       className={cn(
-        "crt-bezel relative flex h-[280px] w-[360px] flex-col items-center justify-center gap-4 overflow-hidden transition-all",
+        "crt-bezel relative flex h-[300px] w-[460px] flex-col items-center justify-center gap-4 overflow-hidden transition-all",
         "bg-black focus-visible:outline-none",
         isDragOver
           ? "shadow-[0_0_30px_rgba(0,255,65,0.5)]"
@@ -81,7 +81,7 @@ export function CRTDropZone({ onFileSelected, disabled }: CRTDropZoneProps) {
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center gap-3">
         {/* Monitor icon — pixel art style */}
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-2">
           <div
             className={cn(
               "text-phosphor transition-all",
@@ -89,19 +89,33 @@ export function CRTDropZone({ onFileSelected, disabled }: CRTDropZoneProps) {
             )}
           >
             <svg
-              width="48"
-              height="48"
-              viewBox="0 0 48 48"
+              width="64"
+              height="64"
+              viewBox="0 0 64 64"
               fill="none"
               className="drop-shadow-[0_0_8px_rgba(0,255,65,0.4)]"
             >
-              <rect x="8" y="6" width="32" height="24" rx="0" stroke="currentColor" strokeWidth="2" fill="none" />
-              <rect x="12" y="10" width="24" height="16" rx="0" fill="currentColor" opacity="0.15" />
-              <rect x="20" y="32" width="8" height="4" fill="currentColor" />
-              <rect x="14" y="36" width="20" height="2" fill="currentColor" />
+              <rect x="10.6" y="8" width="42.6" height="32" rx="0" stroke="currentColor" strokeWidth="2" fill="none" />
+              <rect x="16" y="13.3" width="32" height="21.3" rx="0" fill="currentColor" opacity="0.15" />
+              <rect x="26.6" y="42.6" width="10.6" height="5.3" fill="currentColor" />
+              <rect x="18.6" y="48" width="26.6" height="2.7" fill="currentColor" />
               {/* Play triangle inside screen */}
-              <polygon points="21,15 21,23 28,19" fill="currentColor" opacity="0.6" />
+              <polygon points="28,20 28,30.6 37.3,25.3" fill="currentColor" opacity="0.6" />
             </svg>
+          </div>
+          {/* Static pixel waveform */}
+          <div className="flex items-end gap-[3px]">
+            {[4, 8, 12, 8, 4].map((h, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 3,
+                  height: h,
+                  backgroundColor: "var(--phosphor-dim)",
+                  opacity: 0.6,
+                }}
+              />
+            ))}
           </div>
         </div>
 

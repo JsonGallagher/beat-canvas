@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Playfair_Display, IBM_Plex_Mono } from "next/font/google";
+import { Playfair_Display, IBM_Plex_Mono, VT323 } from "next/font/google";
 import { Providers } from "@/components/layout/Providers";
 import "./globals.css";
 
@@ -16,6 +16,13 @@ const ibmPlexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
+const vt323 = VT323({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-vt323",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Beat Canvas",
   description: "Create audio-reactive vertical video clips in your browser",
@@ -28,7 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${playfair.variable} ${ibmPlexMono.variable}`}>
+      <body className={`${playfair.variable} ${ibmPlexMono.variable} ${vt323.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>

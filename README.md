@@ -4,6 +4,10 @@ Audio-reactive vertical video clip creator. Upload a song, trim a segment, pick 
 
 Built with Next.js 16, Three.js, Web Audio API, and ffmpeg.wasm.
 
+![Landing page](demos/app_screenshots/App_Screenshot-1.png)
+
+![Editor preview](demos/app_screenshots/App_Preview.gif)
+
 ## Features
 
 - **Audio analysis** — Custom Cooley-Tukey FFT extracts bass, mid, treble, and amplitude at 30 FPS with attack/release smoothing
