@@ -25,7 +25,7 @@ import { getPalette } from "@/lib/render/palettes";
 import { buildReactiveFrames } from "@/lib/audio/ReactiveFeatureBuilder";
 import type { ReactiveFrame } from "@/types/project";
 
-const DEFAULT_FRAME: ReactiveFrame = { time: 0, bass: 0, mid: 0, treble: 0, amplitude: 0 };
+const DEFAULT_FRAME: ReactiveFrame = { time: 0, bass: 0, mid: 0, treble: 0, amplitude: 0, kick: false, onset: false, kickIntensity: 0 };
 
 export default function EditorPage() {
   useRouteGuard(["audio"]);

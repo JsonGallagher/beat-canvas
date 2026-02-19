@@ -108,7 +108,7 @@ export class ExportService {
       }
 
       const time = f / FPS;
-      const frame = config.reactiveFrames[f] ?? { time, bass: 0, mid: 0, treble: 0, amplitude: 0 };
+      const frame = config.reactiveFrames[f] ?? { time, bass: 0, mid: 0, treble: 0, amplitude: 0, kick: false, onset: false, kickIntensity: 0 };
 
       const input: ReactiveInput = {
         frame,

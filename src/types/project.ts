@@ -9,6 +9,9 @@ export interface ReactiveFrame {
   mid: number;
   treble: number;
   amplitude: number;
+  kick: boolean;
+  onset: boolean;
+  kickIntensity: number;
 }
 
 export interface OverlaySettings {

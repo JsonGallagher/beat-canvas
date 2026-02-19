@@ -16,3 +16,9 @@ export const RELEASE_ALPHA = 0.3;
 // Quiet audio normalization
 export const QUIET_THRESHOLD = 0.1;
 export const QUIET_TARGET_PEAK = 0.8;
+
+// Beat detection
+export const KICK_THRESHOLD = 0.12;
+export const ONSET_THRESHOLD = 0.08;
+export const KICK_DECAY = 0.88;
+export const KICK_COOLDOWN_FRAMES = 4;

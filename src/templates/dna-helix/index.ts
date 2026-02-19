@@ -37,8 +37,6 @@ class DnaHelix implements TemplateModule {
   private midSmooth = 0;
   private trebleSmooth = 0;
   private ampSmooth = 0;
-  private kickAccum = 0;
-  private bassPrev = 0;
 
   init(ctx: RenderContext) {
     // Helix particles

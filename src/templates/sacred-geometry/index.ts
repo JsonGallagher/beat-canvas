@@ -33,8 +33,6 @@ class SacredGeometry implements TemplateModule {
   private midSmooth = 0;
   private trebleSmooth = 0;
   private ampSmooth = 0;
-  private kickAccum = 0;
-  private bassPrev = 0;
 
   private _generateSacredPoints(): { positions: Float32Array; layers: Float32Array } {
     const pos = new Float32Array(NODE_COUNT * 3);

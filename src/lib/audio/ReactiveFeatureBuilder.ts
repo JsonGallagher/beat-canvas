@@ -12,6 +12,10 @@ import {
   RELEASE_ALPHA,
   QUIET_THRESHOLD,
   QUIET_TARGET_PEAK,
+  KICK_THRESHOLD,
+  ONSET_THRESHOLD,
+  KICK_DECAY,
+  KICK_COOLDOWN_FRAMES,
 } from "./audioConstants";
 
 // Inline radix-2 FFT (Cooley-Tukey)
@@ -168,7 +172,7 @@ export function buildReactiveFrames(
     prevTreble = treble;
     prevAmp = amplitude;
 
-    frames.push({ time, bass, mid, treble, amplitude });
+    frames.push({ time, bass, mid, treble, amplitude, kick: false, onset: false, kickIntensity: 0 });
   }
 
   // Normalize: find max of each band
@@ -199,6 +203,32 @@ export function buildReactiveFrames(
       frame.treble = Math.min(1, frame.treble * scale);
       frame.amplitude = Math.min(1, frame.amplitude * scale);
     }
+  }
+
+  // Beat detection pass
+  let prevFrameBass = 0;
+  let kickIntensity = 0;
+  let cooldown = 0;
+
+  for (const frame of frames) {
+    const bassDelta = frame.bass - prevFrameBass;
+    prevFrameBass = frame.bass;
+
+    // Onset: any upward bass transient above threshold
+    frame.onset = bassDelta > ONSET_THRESHOLD;
+
+    // Kick: stronger transient with cooldown to avoid double-triggers
+    if (bassDelta > KICK_THRESHOLD && cooldown <= 0) {
+      frame.kick = true;
+      kickIntensity = Math.min(kickIntensity + bassDelta * 2, 1);
+      cooldown = KICK_COOLDOWN_FRAMES;
+    } else {
+      frame.kick = false;
+      cooldown = Math.max(0, cooldown - 1);
+    }
+
+    kickIntensity *= KICK_DECAY;
+    frame.kickIntensity = kickIntensity;
   }
 
   return frames;
