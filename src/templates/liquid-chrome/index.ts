@@ -252,17 +252,12 @@ class LiquidChrome implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.15;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.12) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2.5, 1);
-    this.kickAccum *= 0.88;
-
     this.uniforms.uTime!.value = this.time;
     this.uniforms.uBass!.value = this.bassSmooth;
     this.uniforms.uMid!.value = this.midSmooth;
     this.uniforms.uTreble!.value = this.trebleSmooth;
     this.uniforms.uAmp!.value = this.ampSmooth;
-    this.uniforms.uKick!.value = this.kickAccum;
+    this.uniforms.uKick!.value = frame.kickIntensity;
     this.uniforms.uMorphIntensity!.value = Number(params.morphIntensity ?? 0.6);
     this.uniforms.uFlowSpeed!.value = Number(params.flowSpeed ?? 0.5);
 

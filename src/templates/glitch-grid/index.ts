@@ -16,8 +16,6 @@ class GlitchGrid implements TemplateModule {
   private glitchSeeds: Float32Array | null = null;
   private zOffsets: Float32Array | null = null;
   private bassSmooth = 0;
-  private prevBass = 0;
-
   init(ctx: RenderContext) {
     const geometry = new THREE.BoxGeometry(0.28, 0.28, 0.28);
     const material = new THREE.MeshBasicMaterial({
@@ -67,9 +65,7 @@ class GlitchGrid implements TemplateModule {
     this.bassSmooth += (bass - this.bassSmooth) * 0.15;
     const glitchAmount = Number(params.glitchAmount ?? 0.5);
 
-    // Detect bass transients
-    const bassHit = bass - this.prevBass > 0.15;
-    this.prevBass = bass;
+    const bassHit = frame.kick;
 
     const color1 = new THREE.Color(palette[0] ?? "#00FF41");
     const color2 = new THREE.Color(palette[1] ?? "#FF55FF");

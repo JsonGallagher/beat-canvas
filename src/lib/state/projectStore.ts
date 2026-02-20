@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { temporal } from "zundo";
 import type { ClipSelection, OverlaySettings, ProjectState, ReactiveFrame } from "@/types/project";
 
 const defaultOverlay: OverlaySettings = {
@@ -34,11 +35,18 @@ interface ProjectActions {
   // Overlay
   updateOverlay: (updates: Partial<OverlaySettings>) => void;
 
+  // Demo
+  setIsDemo: (value: boolean) => void;
+
   // Reset
   reset: () => void;
 }
 
-const initialState: ProjectState = {
+interface FullState extends ProjectState, ProjectActions {
+  isDemo: boolean;
+}
+
+const initialState: ProjectState & { isDemo: boolean } = {
   audioFile: null,
   audioBuffer: null,
   audioDuration: 0,
@@ -51,37 +59,57 @@ const initialState: ProjectState = {
   intensityMultiplier: 1,
   qualityTier: "medium",
   overlay: defaultOverlay,
+  isDemo: false,
 };
 
-export const useProjectStore = create<ProjectState & ProjectActions>((set) => ({
-  ...initialState,
+export const useProjectStore = create<FullState>()(
+  temporal(
+    (set) => ({
+      ...initialState,
 
-  setAudioFile: (file, buffer) =>
-    set({
-      audioFile: file,
-      audioBuffer: buffer,
-      audioDuration: buffer.duration,
+      setAudioFile: (file, buffer) =>
+        set({
+          audioFile: file,
+          audioBuffer: buffer,
+          audioDuration: buffer.duration,
+        }),
+
+      setWaveformPeaks: (peaks) => set({ waveformPeaks: peaks }),
+
+      setClip: (clip) => set({ clip }),
+
+      setReactiveFrames: (frames) => set({ reactiveFrames: frames }),
+
+      setSelectedTemplate: (id) => set({ selectedTemplateId: id }),
+
+      setTemplateParams: (params) =>
+        set((state) => ({ templateParams: { ...state.templateParams, ...params } })),
+
+      setPalette: (palette) => set({ palette }),
+
+      setIntensityMultiplier: (value) => set({ intensityMultiplier: value }),
+
+      setQualityTier: (tier) => set({ qualityTier: tier }),
+
+      updateOverlay: (updates) =>
+        set((state) => ({ overlay: { ...state.overlay, ...updates } })),
+
+      setIsDemo: (value) => set({ isDemo: value }),
+
+      reset: () => set(initialState),
     }),
+    {
+      partialize: (s) => ({
+        selectedTemplateId: s.selectedTemplateId,
+        templateParams: s.templateParams,
+        palette: s.palette,
+        intensityMultiplier: s.intensityMultiplier,
+        qualityTier: s.qualityTier,
+        clip: s.clip,
+        overlay: s.overlay,
+      }),
+    }
+  )
+);
 
-  setWaveformPeaks: (peaks) => set({ waveformPeaks: peaks }),
-
-  setClip: (clip) => set({ clip }),
-
-  setReactiveFrames: (frames) => set({ reactiveFrames: frames }),
-
-  setSelectedTemplate: (id) => set({ selectedTemplateId: id }),
-
-  setTemplateParams: (params) =>
-    set((state) => ({ templateParams: { ...state.templateParams, ...params } })),
-
-  setPalette: (palette) => set({ palette }),
-
-  setIntensityMultiplier: (value) => set({ intensityMultiplier: value }),
-
-  setQualityTier: (tier) => set({ qualityTier: tier }),
-
-  updateOverlay: (updates) =>
-    set((state) => ({ overlay: { ...state.overlay, ...updates } })),
-
-  reset: () => set(initialState),
-}));
+export const useTemporalStore = useProjectStore.temporal;

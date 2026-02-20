@@ -130,11 +130,6 @@ class CosmicJellyfish implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.15;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.1) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2.5, 1);
-    this.kickAccum *= 0.9;
-
     const pulseDepth = Number(params.pulseDepth ?? 0.6);
     const flowSpeed = Number(params.flowSpeed ?? 0.5);
     const t = this.time;
@@ -152,7 +147,7 @@ class CosmicJellyfish implements TemplateModule {
       const bobX = jelly.centerX + Math.sin(t * 0.3 + jelly.phase * 2) * 0.3;
 
       // Bell contraction cycle synced to bass
-      const contraction = 1 - this.bassSmooth * pulseDepth * 0.35 - this.kickAccum * 0.2;
+      const contraction = 1 - this.bassSmooth * pulseDepth * 0.35 - frame.kickIntensity * 0.2;
       const bellRadius = 1.5 * scale * contraction;
       const bellHeight = 1.0 * scale;
 
@@ -211,7 +206,7 @@ class CosmicJellyfish implements TemplateModule {
           const wave2 = Math.cos(segNorm * 8 + t * speed * 1.5 - waveDelay * 1.3 + ti * 1.2) * this.trebleSmooth * 0.4;
 
           // Bass makes tentacles flare outward dramatically
-          const flare = segNorm * segNorm * (this.bassSmooth * 1.2 + this.kickAccum * 2) * scale;
+          const flare = segNorm * segNorm * (this.bassSmooth * 1.2 + frame.kickIntensity * 2) * scale;
 
           // Gravity pull + organic droop
           const droop = segNorm * segNorm * 3 * scale;

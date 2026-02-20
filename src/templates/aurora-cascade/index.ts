@@ -209,17 +209,12 @@ class AuroraCascade implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.12;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.1) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2, 1);
-    this.kickAccum *= 0.92;
-
     this.uniforms.uTime!.value = this.time;
     this.uniforms.uBass!.value = this.bassSmooth;
     this.uniforms.uMid!.value = this.midSmooth;
     this.uniforms.uTreble!.value = this.trebleSmooth;
     this.uniforms.uAmp!.value = this.ampSmooth;
-    this.uniforms.uKick!.value = this.kickAccum;
+    this.uniforms.uKick!.value = frame.kickIntensity;
     this.uniforms.uWaveSpeed!.value = Number(params.waveSpeed ?? 0.5);
     this.uniforms.uIntensity!.value = Number(params.intensity ?? 0.6);
 

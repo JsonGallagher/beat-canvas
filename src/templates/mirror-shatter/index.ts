@@ -235,17 +235,12 @@ class MirrorShatter implements TemplateModule {
     this.trebleSmooth += (frame.treble * intensityMultiplier - this.trebleSmooth) * 0.15;
     this.ampSmooth += (frame.amplitude * intensityMultiplier - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.1) this.kickAccum = Math.min(this.kickAccum + bassAccel * 3, 1);
-    this.kickAccum *= 0.85;
-
     this.uniforms.uTime!.value = this.time;
     this.uniforms.uBass!.value = this.bassSmooth;
     this.uniforms.uMid!.value = this.midSmooth;
     this.uniforms.uTreble!.value = this.trebleSmooth;
     this.uniforms.uAmp!.value = this.ampSmooth;
-    this.uniforms.uKick!.value = this.kickAccum;
+    this.uniforms.uKick!.value = frame.kickIntensity;
     this.uniforms.uShatterForce!.value = Number(params.shatterForce ?? 0.6);
     this.uniforms.uReflectivity!.value = Number(params.reflectivity ?? 0.7);
 

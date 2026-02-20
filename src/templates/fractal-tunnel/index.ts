@@ -245,11 +245,6 @@ class FractalTunnel implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.15;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.12) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2, 1);
-    this.kickAccum *= 0.9;
-
     const speed = Number(params.speed ?? 0.5);
     this.zAccum += delta * (2 + speed * 6) * (1 + this.bassSmooth * 3);
 
@@ -258,7 +253,7 @@ class FractalTunnel implements TemplateModule {
     this.uniforms.uMid!.value = this.midSmooth;
     this.uniforms.uTreble!.value = this.trebleSmooth;
     this.uniforms.uAmp!.value = this.ampSmooth;
-    this.uniforms.uKick!.value = this.kickAccum;
+    this.uniforms.uKick!.value = frame.kickIntensity;
     this.uniforms.uZ!.value = this.zAccum;
     this.uniforms.uSpeed!.value = speed;
     this.uniforms.uTwist!.value = Number(params.twist ?? 0.5);

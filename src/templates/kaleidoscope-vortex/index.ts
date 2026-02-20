@@ -267,19 +267,13 @@ class KaleidoscopeVortex implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.15;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    // Kick detection
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.15) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2, 1);
-    this.kickAccum *= 0.9;
-
     // Update uniforms
     this.uniforms.uTime!.value = this.time;
     this.uniforms.uBass!.value = this.bassSmooth;
     this.uniforms.uMid!.value = this.midSmooth;
     this.uniforms.uTreble!.value = this.trebleSmooth;
     this.uniforms.uAmp!.value = this.ampSmooth;
-    this.uniforms.uKick!.value = this.kickAccum;
+    this.uniforms.uKick!.value = frame.kickIntensity;
     this.uniforms.uFolds!.value = Number(params.complexity ?? 0.5);
     this.uniforms.uZoom!.value = Number(params.rotationSpeed ?? 0.5);
 

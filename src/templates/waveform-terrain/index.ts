@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import type { TemplateModule, RenderContext, ReactiveInput, TemplateControl } from "@/types/template";
 
-const GRID_X = 80;
-const GRID_Z = 80;
+const GRID_X = 100;
+const GRID_Z = 100;
 
 class WaveformTerrain implements TemplateModule {
   id = "waveform-terrain";
@@ -13,15 +13,23 @@ class WaveformTerrain implements TemplateModule {
   private wireframe: THREE.LineSegments | null = null;
   private wirePositions: Float32Array | null = null;
   private historyRows: Float32Array[] = [];
+  private prevFrontRow: Float32Array = new Float32Array(GRID_X);
   private time = 0;
   private scrollAcc = 0;
   private ampSmooth = 0;
+  private bassSmooth = 0;
+  // Kick ripple
+  private ripplePhase = 0;
+  private rippleActive = false;
+  private rippleKickIntensity = 0;
+  // Onset pulse
+  private onsetPulsePhase = 0;
+  private onsetPulseActive = false;
 
   init(ctx: RenderContext) {
     const geometry = new THREE.PlaneGeometry(10, 16, GRID_X - 1, GRID_Z - 1);
     geometry.rotateX(-Math.PI * 0.42);
 
-    // Invisible solid mesh (just for structure)
     const material = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
@@ -32,8 +40,6 @@ class WaveformTerrain implements TemplateModule {
     this.mesh.position.y = -1;
     ctx.scene.add(this.mesh);
 
-    // Wireframe: build our own line segments from the grid
-    // This avoids recreating WireframeGeometry every frame
     const wireGeo = this._buildWireframeGeometry(geometry);
     const wireMat = new THREE.LineBasicMaterial({
       color: 0x00ff41,
@@ -45,25 +51,21 @@ class WaveformTerrain implements TemplateModule {
     this.wireframe.position.y = -1;
     ctx.scene.add(this.wireframe);
 
-    // Initialize history
     for (let z = 0; z < GRID_Z; z++) {
       this.historyRows.push(new Float32Array(GRID_X));
     }
+    this.prevFrontRow = new Float32Array(GRID_X);
   }
 
-  /** Build line segments for the grid once — we'll update positions in-place */
   private _buildWireframeGeometry(planeGeo: THREE.PlaneGeometry): THREE.BufferGeometry {
-    // Horizontal lines + vertical lines = line segments
-    const hLines = GRID_Z * (GRID_X - 1); // horizontal
-    const vLines = GRID_X * (GRID_Z - 1); // vertical
+    const hLines = GRID_Z * (GRID_X - 1);
+    const vLines = GRID_X * (GRID_Z - 1);
     const totalSegments = hLines + vLines;
-    const positions = new Float32Array(totalSegments * 2 * 3); // 2 vertices per segment
+    const positions = new Float32Array(totalSegments * 2 * 3);
 
-    // Copy initial positions from the plane — we'll update later
     const planePos = planeGeo.attributes.position as THREE.BufferAttribute;
     let idx = 0;
 
-    // Horizontal segments (row by row)
     for (let z = 0; z < GRID_Z; z++) {
       for (let x = 0; x < GRID_X - 1; x++) {
         const i1 = z * GRID_X + x;
@@ -77,7 +79,6 @@ class WaveformTerrain implements TemplateModule {
       }
     }
 
-    // Vertical segments (column by column)
     for (let x = 0; x < GRID_X; x++) {
       for (let z = 0; z < GRID_Z - 1; z++) {
         const i1 = z * GRID_X + x;
@@ -97,7 +98,7 @@ class WaveformTerrain implements TemplateModule {
     return geo;
   }
 
-  update(_ctx: RenderContext, input: ReactiveInput, delta: number) {
+  update(ctx: RenderContext, input: ReactiveInput, delta: number) {
     if (!this.mesh || !this.wireframe || !this.wirePositions) return;
 
     this.time += delta;
@@ -108,13 +109,34 @@ class WaveformTerrain implements TemplateModule {
     const treble = frame.treble * intensityMultiplier;
 
     this.ampSmooth += (amp - this.ampSmooth) * 0.12;
+    this.bassSmooth += (bass - this.bassSmooth) * 0.1;
+
+    // Kick ripple: spawn concentric wave from center
+    if (frame.kick) {
+      this.rippleActive = true;
+      this.ripplePhase = 0;
+      this.rippleKickIntensity = frame.kickIntensity;
+    }
+    if (this.rippleActive) {
+      this.ripplePhase += delta * 3.5;
+      if (this.ripplePhase > 5.0) this.rippleActive = false;
+    }
+
+    // Onset pulse: vertical shockwave across terrain
+    if (frame.onset) {
+      this.onsetPulseActive = true;
+      this.onsetPulsePhase = 0;
+    }
+    if (this.onsetPulseActive) {
+      this.onsetPulsePhase += delta * 5;
+      if (this.onsetPulsePhase > Math.PI * 2) this.onsetPulseActive = false;
+    }
 
     const scrollSpeed = 0.3 + Number(params.scrollSpeed ?? 0.5) * 0.7;
     const heightScale = 0.5 + Number(params.heightScale ?? 0.5) * 2;
 
-    // Scroll accumulator — shift rows when enough time passes
     this.scrollAcc += delta * scrollSpeed * (1 + bass * 2);
-    const scrollStep = 0.033; // ~30 rows per second at speed 1
+    const scrollStep = 0.033;
 
     while (this.scrollAcc >= scrollStep) {
       this.scrollAcc -= scrollStep;
@@ -126,14 +148,13 @@ class WaveformTerrain implements TemplateModule {
         if (prev && curr) curr.set(prev);
       }
 
-      // Generate new front row from FFT bands
+      // Generate new front row + history smear (70/30 blend with previous)
       const frontRow = this.historyRows[0];
       if (frontRow) {
         for (let x = 0; x < GRID_X; x++) {
           const xNorm = x / GRID_X;
           let height = 0;
 
-          // Smooth frequency regions
           if (xNorm < 0.3) {
             const localX = xNorm / 0.3;
             height = bass * (0.5 + Math.sin(localX * Math.PI) * 0.5);
@@ -145,60 +166,79 @@ class WaveformTerrain implements TemplateModule {
             height = treble * (0.5 + Math.sin(localX * Math.PI) * 0.5);
           }
 
-          // Add some per-column variation
           height += Math.sin(x * 0.3 + this.time * 2) * amp * 0.15;
-          frontRow[x] = height * heightScale;
+          const currentHeight = height * heightScale;
+          // History smear: blend with previous front row
+          frontRow[x] = currentHeight * 0.7 + (this.prevFrontRow[x] ?? 0) * 0.3;
         }
+        this.prevFrontRow.set(frontRow);
       }
     }
 
-    // Apply heights to mesh geometry
+    // Apply heights to mesh + compute ripple displacement per vertex
     const meshPos = this.mesh.geometry.attributes.position as THREE.BufferAttribute;
     for (let z = 0; z < GRID_Z; z++) {
       const row = this.historyRows[z];
       if (!row) continue;
       for (let x = 0; x < GRID_X; x++) {
         const i = z * GRID_X + x;
-        const height = row[x] ?? 0;
+        let height = row[x] ?? 0;
+
+        // Kick ripple displacement
+        if (this.rippleActive) {
+          // 2D distance from grid center (normalized)
+          const cx = (x / (GRID_X - 1) - 0.5) * 10;
+          const cz = (z / (GRID_Z - 1) - 0.5) * 8;
+          const radialDist = Math.sqrt(cx * cx + cz * cz);
+          const decay = Math.exp(-this.ripplePhase * 0.25) * Math.exp(-radialDist * 0.12);
+          height += Math.sin(this.ripplePhase - radialDist * 0.8) * this.rippleKickIntensity * 0.5 * decay;
+        }
+
+        // Onset vertical pulse
+        if (this.onsetPulseActive) {
+          height += Math.sin(this.onsetPulsePhase) * amp * 0.35;
+        }
+
         meshPos.setZ(i, height);
       }
     }
     meshPos.needsUpdate = true;
 
-    // Update wireframe positions in-place (no geometry recreation!)
-    let idx = 0;
+    // Update wireframe positions in-place
+    let wIdx = 0;
 
-    // Horizontal segments
     for (let z = 0; z < GRID_Z; z++) {
       for (let x = 0; x < GRID_X - 1; x++) {
         const i1 = z * GRID_X + x;
         const i2 = z * GRID_X + x + 1;
-        this.wirePositions[idx++] = meshPos.getX(i1);
-        this.wirePositions[idx++] = meshPos.getY(i1);
-        this.wirePositions[idx++] = meshPos.getZ(i1);
-        this.wirePositions[idx++] = meshPos.getX(i2);
-        this.wirePositions[idx++] = meshPos.getY(i2);
-        this.wirePositions[idx++] = meshPos.getZ(i2);
+        this.wirePositions[wIdx++] = meshPos.getX(i1);
+        this.wirePositions[wIdx++] = meshPos.getY(i1);
+        this.wirePositions[wIdx++] = meshPos.getZ(i1);
+        this.wirePositions[wIdx++] = meshPos.getX(i2);
+        this.wirePositions[wIdx++] = meshPos.getY(i2);
+        this.wirePositions[wIdx++] = meshPos.getZ(i2);
       }
     }
 
-    // Vertical segments
     for (let x = 0; x < GRID_X; x++) {
       for (let z = 0; z < GRID_Z - 1; z++) {
         const i1 = z * GRID_X + x;
         const i2 = (z + 1) * GRID_X + x;
-        this.wirePositions[idx++] = meshPos.getX(i1);
-        this.wirePositions[idx++] = meshPos.getY(i1);
-        this.wirePositions[idx++] = meshPos.getZ(i1);
-        this.wirePositions[idx++] = meshPos.getX(i2);
-        this.wirePositions[idx++] = meshPos.getY(i2);
-        this.wirePositions[idx++] = meshPos.getZ(i2);
+        this.wirePositions[wIdx++] = meshPos.getX(i1);
+        this.wirePositions[wIdx++] = meshPos.getY(i1);
+        this.wirePositions[wIdx++] = meshPos.getZ(i1);
+        this.wirePositions[wIdx++] = meshPos.getX(i2);
+        this.wirePositions[wIdx++] = meshPos.getY(i2);
+        this.wirePositions[wIdx++] = meshPos.getZ(i2);
       }
     }
 
     this.wireframe.geometry.attributes.position!.needsUpdate = true;
 
-    // Color and opacity
+    // Bass camera sway
+    const cam = ctx.camera as THREE.PerspectiveCamera;
+    cam.position.y = Math.sin(this.time * 0.7) * this.bassSmooth * 0.3;
+
     const color = new THREE.Color(palette[0] ?? "#00FF41");
     const mat = this.wireframe.material as THREE.LineBasicMaterial;
     const brightness = 0.3 + this.ampSmooth * 0.7;

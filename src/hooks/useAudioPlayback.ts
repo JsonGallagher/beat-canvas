@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const MIN_CLIP_SPAN = 1e-3;
+const OFFSET_EPSILON = 1e-4;
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
 interface PlaybackState {
   isPlaying: boolean;
   currentTime: number;
@@ -25,6 +33,24 @@ export function useAudioPlayback(
   const startWallRef = useRef(0);
   const startOffsetRef = useRef(inTime);
   const rafRef = useRef(0);
+  const tickRef = useRef<() => void>(() => {});
+
+  const getSafeClipRange = useCallback(() => {
+    if (!buffer) {
+      const safeIn = Math.max(0, inTime);
+      const safeOut = Math.max(safeIn + MIN_CLIP_SPAN, outTime);
+      return { safeIn, safeOut, clipDuration: safeOut - safeIn };
+    }
+
+    const duration = Math.max(buffer.duration, MIN_CLIP_SPAN);
+    const safeIn = clamp(inTime, 0, Math.max(0, duration - MIN_CLIP_SPAN));
+    const safeOut = clamp(outTime, safeIn + MIN_CLIP_SPAN, duration);
+    return {
+      safeIn,
+      safeOut,
+      clipDuration: Math.max(MIN_CLIP_SPAN, safeOut - safeIn),
+    };
+  }, [buffer, inTime, outTime]);
 
   const stopSource = useCallback(() => {
     if (sourceRef.current) {
@@ -42,21 +68,26 @@ export function useAudioPlayback(
   const tick = useCallback(() => {
     if (!ctxRef.current) return;
     const elapsed = ctxRef.current.currentTime - startWallRef.current;
-    const clipDuration = outTime - inTime;
+    const { safeIn, safeOut, clipDuration } = getSafeClipRange();
     let t = startOffsetRef.current + elapsed;
 
     if (loop) {
-      while (t >= outTime) t -= clipDuration;
-    } else if (t >= outTime) {
-      setCurrentTime(outTime);
+      while (t >= safeOut) t -= clipDuration;
+      while (t < safeIn) t += clipDuration;
+    } else if (t >= safeOut) {
+      setCurrentTime(safeOut);
       setIsPlaying(false);
       stopSource();
       return;
     }
 
-    setCurrentTime(t);
-    rafRef.current = requestAnimationFrame(tick);
-  }, [inTime, outTime, loop, stopSource]);
+    setCurrentTime(clamp(t, safeIn, safeOut));
+    rafRef.current = requestAnimationFrame(() => tickRef.current());
+  }, [getSafeClipRange, loop, stopSource]);
+
+  useEffect(() => {
+    tickRef.current = tick;
+  }, [tick]);
 
   const play = useCallback(() => {
     if (!buffer) return;
@@ -72,16 +103,18 @@ export function useAudioPlayback(
     source.buffer = buffer;
     source.connect(ctx.destination);
     source.loop = loop;
+    const { safeIn, safeOut } = getSafeClipRange();
+    const maxOffset = Math.max(safeIn, safeOut - OFFSET_EPSILON);
     if (loop) {
-      source.loopStart = inTime;
-      source.loopEnd = outTime;
+      source.loopStart = safeIn;
+      source.loopEnd = safeOut;
     }
 
-    const offset = currentTime < inTime || currentTime >= outTime ? inTime : currentTime;
+    const offset = clamp(currentTime, safeIn, maxOffset);
     startOffsetRef.current = offset;
     startWallRef.current = ctx.currentTime;
 
-    source.start(0, offset, loop ? undefined : outTime - offset);
+    source.start(0, offset, loop ? undefined : Math.max(MIN_CLIP_SPAN, safeOut - offset));
     sourceRef.current = source;
 
     source.onended = () => {
@@ -92,8 +125,8 @@ export function useAudioPlayback(
     };
 
     setIsPlaying(true);
-    rafRef.current = requestAnimationFrame(tick);
-  }, [buffer, inTime, outTime, currentTime, loop, tick, stopSource]);
+    rafRef.current = requestAnimationFrame(() => tickRef.current());
+  }, [buffer, currentTime, getSafeClipRange, loop, stopSource]);
 
   const pause = useCallback(() => {
     stopSource();
@@ -102,7 +135,9 @@ export function useAudioPlayback(
 
   const seek = useCallback(
     (time: number) => {
-      const clamped = Math.max(inTime, Math.min(outTime, time));
+      const { safeIn, safeOut } = getSafeClipRange();
+      const maxOffset = Math.max(safeIn, safeOut - OFFSET_EPSILON);
+      const clamped = clamp(time, safeIn, maxOffset);
       setCurrentTime(clamped);
       if (isPlaying) {
         stopSource();
@@ -114,31 +149,24 @@ export function useAudioPlayback(
         source.connect(ctx.destination);
         source.loop = loop;
         if (loop) {
-          source.loopStart = inTime;
-          source.loopEnd = outTime;
+          source.loopStart = safeIn;
+          source.loopEnd = safeOut;
         }
 
         startOffsetRef.current = clamped;
         startWallRef.current = ctx.currentTime;
-        source.start(0, clamped, loop ? undefined : outTime - clamped);
+        source.start(0, clamped, loop ? undefined : Math.max(MIN_CLIP_SPAN, safeOut - clamped));
         sourceRef.current = source;
-        rafRef.current = requestAnimationFrame(tick);
+        rafRef.current = requestAnimationFrame(() => tickRef.current());
       }
     },
-    [buffer, inTime, outTime, isPlaying, loop, tick, stopSource]
+    [buffer, getSafeClipRange, isPlaying, loop, stopSource]
   );
 
   const toggle = useCallback(() => {
     if (isPlaying) pause();
     else play();
   }, [isPlaying, play, pause]);
-
-  // Snap playhead if trim changes exclude it
-  useEffect(() => {
-    if (currentTime < inTime || currentTime > outTime) {
-      setCurrentTime(inTime);
-    }
-  }, [inTime, outTime, currentTime]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -151,5 +179,8 @@ export function useAudioPlayback(
     };
   }, [stopSource]);
 
-  return { isPlaying, currentTime, play, pause, seek, toggle };
+  const { safeIn, safeOut } = getSafeClipRange();
+  const clampedCurrentTime = clamp(currentTime, safeIn, safeOut);
+
+  return { isPlaying, currentTime: clampedCurrentTime, play, pause, seek, toggle };
 }

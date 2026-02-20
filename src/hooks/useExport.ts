@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { toast } from "sonner";
 import { ExportService, type ExportProgress, type ExportConfig } from "@/lib/export/ExportService";
 import type { ExportStage, ExportResult } from "@/types/export";
 
@@ -27,6 +28,7 @@ export function useExport() {
 
   const startExport = useCallback(async (config: ExportConfig) => {
     setState({ stage: "preparing", progress: 0, message: "Preparing...", result: null, error: null });
+    toast("Export started");
 
     const service = new ExportService();
     serviceRef.current = service;
@@ -43,6 +45,7 @@ export function useExport() {
         }));
       });
 
+      toast.success("Export ready – downloading");
       setState({
         stage: "done",
         progress: 1,
@@ -55,6 +58,7 @@ export function useExport() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Export failed";
       if (message !== "Export cancelled") {
+        toast.error("Export failed: " + message);
         setState((prev) => ({
           ...prev,
           stage: "error",

@@ -19,8 +19,9 @@ interface TrimSectionProps {
 }
 
 function formatTime(s: number): string {
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
+  const safeSeconds = Number.isFinite(s) ? Math.max(0, s) : 0;
+  const m = Math.floor(safeSeconds / 60);
+  const sec = Math.floor(safeSeconds % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
@@ -33,7 +34,7 @@ export function TrimSection({
   onTrimChange,
   onSeek,
 }: TrimSectionProps) {
-  const clipDuration = outTime - inTime;
+  const clipDuration = Math.max(0, outTime - inTime);
 
   const handlePreset = useCallback(
     (preset: number) => {
@@ -51,7 +52,7 @@ export function TrimSection({
       </div>
 
       {/* Waveform with trim handles overlay */}
-      <div className="relative">
+      <div className="relative h-32 w-full overflow-hidden rounded-sm">
         <WaveformCanvas
           peaks={peaks}
           inTime={inTime}

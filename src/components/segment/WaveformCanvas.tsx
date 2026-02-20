@@ -35,15 +35,18 @@ export function WaveformCanvas({
 
     const w = rect.width;
     const h = rect.height;
+    if (w <= 0 || h <= 0) return;
+
     const mid = h / 2;
+    const safeDuration = Math.max(duration, 1e-3);
 
     ctx.clearRect(0, 0, w, h);
 
     const totalBins = peaks.length;
-    const binsPerPixel = totalBins / w;
+    const binsPerPixel = totalBins / Math.max(1, w);
 
-    const inFrac = inTime / duration;
-    const outFrac = outTime / duration;
+    const inFrac = inTime / safeDuration;
+    const outFrac = outTime / safeDuration;
 
     for (let x = 0; x < w; x++) {
       const binIndex = Math.floor(x * binsPerPixel);
@@ -64,7 +67,7 @@ export function WaveformCanvas({
     }
 
     // Playhead
-    const playX = (currentTime / duration) * w;
+    const playX = (currentTime / safeDuration) * w;
     ctx.fillStyle = "#FFB000";
     ctx.fillRect(playX - 1, 0, 2, h);
   }, [peaks, inTime, outTime, duration, currentTime]);
@@ -82,7 +85,7 @@ export function WaveformCanvas({
   }, [draw]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!onSeek) return;
+    if (!onSeek || duration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const frac = (e.clientX - rect.left) / rect.width;
     onSeek(frac * duration);

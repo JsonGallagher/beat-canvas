@@ -16,6 +16,7 @@ class FilamentPulse implements TemplateModule {
   private time = 0;
   private ampSmooth = 0;
   private bassSmooth = 0;
+  private onsetBranchBoost = 0;
 
   init(ctx: RenderContext) {
     // Create max branches — we'll hide unused ones via opacity
@@ -75,7 +76,12 @@ class FilamentPulse implements TemplateModule {
     this.ampSmooth += (amp - this.ampSmooth) * 0.12;
     this.bassSmooth += (bass - this.bassSmooth) * 0.1;
 
-    const branchCount = Math.round(Number(params.branches ?? 8));
+    // Onset: momentarily add 4 extra branches
+    if (frame.onset) this.onsetBranchBoost = 1.0;
+    this.onsetBranchBoost *= 0.94;
+    this.onsetBranchBoost = Math.max(0, this.onsetBranchBoost - delta * 2.5);
+
+    const branchCount = Math.min(MAX_BRANCHES, Math.round(Number(params.branches ?? 8)) + Math.round(this.onsetBranchBoost * 4));
     const complexity = Number(params.complexity ?? 0.5);
     const t = this.time;
 

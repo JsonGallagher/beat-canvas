@@ -12,20 +12,59 @@ import { OverlayControls } from "@/components/editor/OverlayControls";
 import { IntensityControl } from "@/components/editor/IntensityControl";
 import { TransportBar } from "@/components/editor/TransportBar";
 import { ExportModal } from "@/components/editor/ExportModal";
+import { ShortcutsModal } from "@/components/editor/ShortcutsModal";
 import { Separator } from "@/components/ui/separator";
 import { useRouteGuard } from "@/hooks/useRouteGuard";
 import { useThreeCanvas } from "@/hooks/useThreeCanvas";
 import { useAnimationLoop } from "@/hooks/useAnimationLoop";
 import { useAudioPlayback } from "@/hooks/useAudioPlayback";
-import { useProjectStore } from "@/lib/state/projectStore";
+import { useStore } from "zustand";
+import { useProjectStore, useTemporalStore } from "@/lib/state/projectStore";
 import { TemplateManager } from "@/lib/render/TemplateManager";
 import { OverlaySystem } from "@/lib/render/OverlaySystem";
 import { getTemplate } from "@/templates/registry";
 import { getPalette } from "@/lib/render/palettes";
 import { buildReactiveFrames } from "@/lib/audio/ReactiveFeatureBuilder";
+import { saveToLocalStorage, loadFromLocalStorage, restoreFromSnapshot } from "@/lib/state/projectSerializer";
+import { toast } from "sonner";
 import type { ReactiveFrame } from "@/types/project";
 
 const DEFAULT_FRAME: ReactiveFrame = { time: 0, bass: 0, mid: 0, treble: 0, amplitude: 0, kick: false, onset: false, kickIntensity: 0 };
+const MIN_TRIM_SPAN = 0.1;
+const MAX_TRIM_DURATION = 30;
+const TRIM_EPSILON = 1e-6;
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  if (max < min) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeClipRange(inTime: number, outTime: number, duration: number) {
+  const safeDuration = Math.max(0, duration);
+  if (safeDuration <= 0) return { inTime: 0, outTime: 0 };
+
+  let start = clamp(inTime, 0, safeDuration);
+  let end = clamp(outTime, 0, safeDuration);
+
+  if (end < start) [start, end] = [end, start];
+
+  if (end - start < MIN_TRIM_SPAN) {
+    end = Math.min(safeDuration, start + MIN_TRIM_SPAN);
+    start = Math.max(0, end - MIN_TRIM_SPAN);
+  }
+
+  if (end - start > MAX_TRIM_DURATION) {
+    end = start + MAX_TRIM_DURATION;
+  }
+
+  if (end > safeDuration) {
+    end = safeDuration;
+    start = Math.max(0, end - MAX_TRIM_DURATION);
+  }
+
+  return { inTime: start, outTime: end };
+}
 
 export default function EditorPage() {
   useRouteGuard(["audio"]);
@@ -53,16 +92,47 @@ export default function EditorPage() {
 
   const [showSafeZones, setShowSafeZones] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  // Undo/Redo
+  const { undo, redo, pastStates, futureStates } = useStore(useTemporalStore);
+  const canUndo = pastStates.length > 0;
+  const canRedo = futureStates.length > 0;
+
+  // Derived export readiness (needed before keyboard effect)
+  const canExport = !!audioBuffer && !!clip && !!selectedTemplateId;
+
+  // Restore session on mount
+  useEffect(() => {
+    const snap = loadFromLocalStorage();
+    if (snap) {
+      restoreFromSnapshot(snap);
+      toast("Session restored", { duration: 3000 });
+    }
+  }, []);
 
   // Auto-set default clip if none exists
-  const inTime = clip?.inTime ?? 0;
-  const outTime = clip?.outTime ?? Math.min(audioDuration, 30);
+  const initialInTime = clip?.inTime ?? 0;
+  const initialOutTime = clip?.outTime ?? Math.min(audioDuration, MAX_TRIM_DURATION);
+  const { inTime, outTime } = sanitizeClipRange(initialInTime, initialOutTime, audioDuration);
   const clipDuration = outTime - inTime;
 
   // Auto-set default clip on mount
   useEffect(() => {
     if (!clip && audioDuration > 0) {
-      setClip({ inTime: 0, outTime: Math.min(audioDuration, 30) });
+      setClip({ inTime: 0, outTime: Math.min(audioDuration, MAX_TRIM_DURATION) });
+    }
+  }, [clip, audioDuration, setClip]);
+
+  // Normalize persisted/restored clip values so trim UI always receives valid bounds.
+  useEffect(() => {
+    if (!clip) return;
+    const normalized = sanitizeClipRange(clip.inTime, clip.outTime, audioDuration);
+    if (
+      Math.abs(normalized.inTime - clip.inTime) > TRIM_EPSILON ||
+      Math.abs(normalized.outTime - clip.outTime) > TRIM_EPSILON
+    ) {
+      setClip(normalized);
     }
   }, [clip, audioDuration, setClip]);
 
@@ -157,7 +227,17 @@ export default function EditorPage() {
     }).then(() => {
       rendererRef.current?.renderFrame();
     });
-  }, [overlay.title, overlay.artist, overlay.textPosition, overlay.textSize, overlay.textShadow, rendererRef]);
+  }, [
+    overlay.title,
+    overlay.artist,
+    overlay.textPosition,
+    overlay.textSize,
+    overlay.textShadow,
+    overlay.coverArtUrl,
+    overlay.coverPosition,
+    overlay.coverScale,
+    rendererRef,
+  ]);
 
   useEffect(() => {
     const overlay_ = overlaySystemRef.current;
@@ -217,9 +297,9 @@ export default function EditorPage() {
         playback.pause();
         animation.pause();
       }
-      setClip({ inTime: newIn, outTime: newOut });
+      setClip(sanitizeClipRange(newIn, newOut, audioDuration));
     },
-    [setClip, playback, animation]
+    [setClip, playback, animation, audioDuration]
   );
 
   const handleTrimSeek = useCallback(
@@ -235,17 +315,63 @@ export default function EditorPage() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const meta = e.metaKey || e.ctrlKey;
+
       if (e.code === "Space") {
         e.preventDefault();
         handleToggle();
+        return;
       }
-      if (e.code === "Escape" && showExportModal) {
-        setShowExportModal(false);
+      if (e.code === "Escape") {
+        if (showExportModal) setShowExportModal(false);
+        if (showShortcutsModal) setShowShortcutsModal(false);
+        return;
+      }
+      if (meta && e.shiftKey && e.code === "KeyZ") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (meta && e.code === "KeyZ") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (e.code === "BracketLeft") {
+        e.preventDefault();
+        handleSeek(Math.max(0, animation.time - 1));
+        return;
+      }
+      if (e.code === "BracketRight") {
+        e.preventDefault();
+        handleSeek(Math.min(clipDuration, animation.time + 1));
+        return;
+      }
+      if (e.code === "KeyR") {
+        e.preventDefault();
+        handleSeek(0);
+        return;
+      }
+      if (e.code === "KeyE" && canExport) {
+        e.preventDefault();
+        setShowExportModal(true);
+        return;
+      }
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowShortcutsModal(true);
+        return;
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [handleToggle, showExportModal]);
+  }, [handleToggle, handleSeek, showExportModal, showShortcutsModal, animation.time, clipDuration, canExport, undo, redo]);
+
+  // Autosave on store changes (debounced)
+  useEffect(() => {
+    const id = setTimeout(() => saveToLocalStorage(), 1000);
+    return () => clearTimeout(id);
+  }, [selectedTemplateId, templateParams, palette, intensityMultiplier, overlay, clip]);
 
   // Warn before leaving during export
   useEffect(() => {
@@ -260,7 +386,6 @@ export default function EditorPage() {
 
   const template = selectedTemplateId ? getTemplate(selectedTemplateId) : null;
   const controls = template?.getControlsSchema() ?? [];
-  const canExport = !!audioBuffer && !!clip && !!selectedTemplateId && reactiveFrames.length > 0;
 
   return (
     <>
@@ -270,6 +395,11 @@ export default function EditorPage() {
             filename={audioFile?.name ?? "Untitled"}
             onExport={() => setShowExportModal(true)}
             canExport={canExport}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onShowShortcuts={() => setShowShortcutsModal(true)}
           />
         }
         leftPanel={
@@ -342,6 +472,7 @@ export default function EditorPage() {
       />
 
       <ExportModal open={showExportModal} onClose={() => setShowExportModal(false)} />
+      <ShortcutsModal open={showShortcutsModal} onClose={() => setShowShortcutsModal(false)} />
     </>
   );
 }

@@ -84,13 +84,23 @@ class SmokeRibbons implements TemplateModule {
     });
 
     this.points = new THREE.Points(geo, mat);
+    this.points.frustumCulled = false;
     ctx.scene.add(this.points);
 
     // Feedback for trails
     const w = ctx.width;
     const h = ctx.height;
-    this.rtA = new THREE.WebGLRenderTarget(w, h, { format: THREE.RGBAFormat, type: THREE.HalfFloatType });
-    this.rtB = new THREE.WebGLRenderTarget(w, h, { format: THREE.RGBAFormat, type: THREE.HalfFloatType });
+    const rtOptions: THREE.RenderTargetOptions = {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat,
+      type: THREE.UnsignedByteType,
+      depthBuffer: false,
+      stencilBuffer: false,
+      generateMipmaps: false,
+    };
+    this.rtA = new THREE.WebGLRenderTarget(w, h, rtOptions);
+    this.rtB = new THREE.WebGLRenderTarget(w, h, rtOptions);
     this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.fbScene = new THREE.Scene();
     this.fbUniforms = {
@@ -103,6 +113,8 @@ class SmokeRibbons implements TemplateModule {
         uniforms: this.fbUniforms,
         vertexShader: this.fbVert,
         fragmentShader: this.fbFrag,
+        depthTest: false,
+        depthWrite: false,
       })
     );
     this.fbScene.add(this.fbQuad);
@@ -126,11 +138,6 @@ class SmokeRibbons implements TemplateModule {
     this.midSmooth += (mid - this.midSmooth) * 0.1;
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.12;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
-
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.1) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2, 1);
-    this.kickAccum *= 0.92;
 
     const turbulence = Number(params.turbulence ?? 0.5);
     const density = Number(params.fadeLength ?? 0.7);
@@ -173,7 +180,7 @@ class SmokeRibbons implements TemplateModule {
       const baseZ = Math.cos(pathT * rp.fz + rp.pz) * rp.az;
 
       // Per-particle offset from ribbon center (creates width)
-      const widthMult = 0.1 + this.bassSmooth * 0.3 + this.kickAccum * 0.4;
+      const widthMult = 0.1 + this.bassSmooth * 0.3 + frame.kickIntensity * 0.4;
       const offsetX = Math.sin(seed * 17 + t * 3 + life * 10) * widthMult;
       const offsetY = Math.cos(seed * 23 + t * 2.5 + life * 8) * widthMult;
 

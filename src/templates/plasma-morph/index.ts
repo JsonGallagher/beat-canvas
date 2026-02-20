@@ -233,17 +233,12 @@ class PlasmaMorph implements TemplateModule {
     this.trebleSmooth += (frame.treble * intensityMultiplier - this.trebleSmooth) * 0.15;
     this.ampSmooth += (frame.amplitude * intensityMultiplier - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.12) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2, 1);
-    this.kickAccum *= 0.88;
-
     this.uniforms.uTime!.value = this.time;
     this.uniforms.uBass!.value = this.bassSmooth;
     this.uniforms.uMid!.value = this.midSmooth;
     this.uniforms.uTreble!.value = this.trebleSmooth;
     this.uniforms.uAmp!.value = this.ampSmooth;
-    this.uniforms.uKick!.value = this.kickAccum;
+    this.uniforms.uKick!.value = frame.kickIntensity;
     this.uniforms.uComplexity!.value = Number(params.complexity ?? 0.5);
     this.uniforms.uSpeed!.value = Number(params.speed ?? 0.5);
     (this.uniforms.uColor1!.value as THREE.Color).set(palette[0] ?? "#FF00FF");

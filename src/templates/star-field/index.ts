@@ -15,7 +15,6 @@ class StarField implements TemplateModule {
   private time = 0;
   private bassSmooth = 0;
   private ampSmooth = 0;
-  private prevBass = 0;
   private burstTimer = 0;
 
   init(ctx: RenderContext) {
@@ -70,10 +69,9 @@ class StarField implements TemplateModule {
     const warpSpeed = Number(params.warpSpeed ?? 0.5);
     const density = Number(params.density ?? 0.5);
 
-    // Detect bass transients for warp bursts
-    const bassHit = bass - this.prevBass > 0.2;
-    this.prevBass = bass;
-    if (bassHit) this.burstTimer = 0.3;
+    // Detect bass transients + onset for warp bursts
+    if (frame.kick) this.burstTimer = 0.3;
+    if (frame.onset) this.burstTimer = 0.5; // onset = longer warp burst
     this.burstTimer = Math.max(0, this.burstTimer - delta);
     const burstMultiplier = 1 + this.burstTimer * 8 * warpSpeed;
 
@@ -127,9 +125,11 @@ class StarField implements TemplateModule {
         }
 
         // Color: closer stars tint toward palette color, far stars white
+        // Onset flash: max brightness for one frame
+        const onsetBright = frame.onset ? 1.0 : 0;
         const zNorm = Math.max(0, Math.min(1, (pos[i3 + 2]! + 25) / 30));
         const starColor = c1.clone().lerp(c2, zNorm * 0.5 + Math.sin(i * 0.1 + t * 0.3) * 0.2);
-        const brightness = 0.4 + this.ampSmooth * 0.6 + zNorm * 0.3;
+        const brightness = 0.4 + this.ampSmooth * 0.6 + zNorm * 0.3 + onsetBright * 0.6;
         col[i3] = starColor.r * brightness;
         col[i3 + 1] = starColor.g * brightness;
         col[i3 + 2] = starColor.b * brightness;

@@ -119,11 +119,6 @@ class DnaHelix implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.15;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.12) this.kickAccum = Math.min(this.kickAccum + bassAccel * 3, 1);
-    this.kickAccum *= 0.88;
-
     const helixRadius = Number(params.radius ?? 0.5);
     const twistSpeed = Number(params.twistSpeed ?? 0.5);
     const t = this.time;
@@ -151,7 +146,7 @@ class DnaHelix implements TemplateModule {
       // Radius: pulsates with bass, explodes on kicks
       const rMod = baseRadius
         + Math.sin(yNorm * 12 + t * 3) * this.bassSmooth * 0.4
-        + this.kickAccum * 1.5 * Math.sin(phase * 7 + t * 5)
+        + frame.kickIntensity * 1.5 * Math.sin(phase * 7 + t * 5)
         + Math.sin(yNorm * 20 + t * 6) * this.trebleSmooth * 0.15;
 
       // Particle drifts slightly from perfect helix

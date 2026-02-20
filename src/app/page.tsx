@@ -10,14 +10,16 @@ import { Button } from "@/components/ui/button";
 import { AudioBarsLoader } from "@/components/ui/AudioBarsLoader";
 import { loadAudioFile, type AudioLoadError } from "@/lib/audio/AudioLoader";
 import { buildWaveformPeaks } from "@/lib/audio/WaveformBuilder";
+import { generateDemoAudio } from "@/lib/audio/demoGenerator";
 import { useProjectStore } from "@/lib/state/projectStore";
+import { toast } from "sonner";
 import { Upload, Layers, Download } from "lucide-react";
 
 type LoadingState = "idle" | "decoding" | "analyzing";
 
 export default function UploadPage() {
   const router = useRouter();
-  const { audioFile, audioDuration, setAudioFile, setWaveformPeaks } = useProjectStore();
+  const { audioFile, audioDuration, setAudioFile, setWaveformPeaks, setIsDemo } = useProjectStore();
   const [loading, setLoading] = useState<LoadingState>("idle");
   const [error, setError] = useState<AudioLoadError | null>(null);
 
@@ -46,6 +48,24 @@ export default function UploadPage() {
   const handleContinue = () => {
     router.push("/editor");
   };
+
+  const handleDemo = useCallback(async () => {
+    setLoading("decoding");
+    try {
+      const buf = await generateDemoAudio();
+      const demoFile = new File([], "demo-beat.wav", { type: "audio/wav" });
+      setAudioFile(demoFile, buf);
+      setLoading("analyzing");
+      const peaks = buildWaveformPeaks(buf);
+      setWaveformPeaks(peaks);
+      setIsDemo(true);
+      setLoading("idle");
+      toast("Demo loaded — try uploading your own track!");
+      router.push("/editor");
+    } catch {
+      setLoading("idle");
+    }
+  }, [setAudioFile, setWaveformPeaks, setIsDemo, router]);
 
   const handleRetry = () => {
     setError(null);
@@ -126,7 +146,12 @@ export default function UploadPage() {
             </div>
           </div>
         ) : (
-          <CRTDropZone onFileSelected={handleFile} />
+          <div className="flex flex-col items-center gap-4">
+            <CRTDropZone onFileSelected={handleFile} />
+            <Button variant="ghost" size="sm" onClick={handleDemo} className="type-caption text-muted-foreground">
+              or try a demo beat
+            </Button>
+          </div>
         )}
       </div>
 

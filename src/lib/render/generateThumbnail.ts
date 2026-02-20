@@ -13,6 +13,9 @@ const SYNTHETIC_FRAME: ReactiveFrame = {
   mid: 0.5,
   treble: 0.4,
   amplitude: 0.7,
+  kick: false,
+  onset: false,
+  kickIntensity: 0,
 };
 
 // Shared canvas + renderer reused for every thumbnail — keeps WebGL context count at 1.

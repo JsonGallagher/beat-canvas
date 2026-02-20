@@ -33,6 +33,8 @@ class SacredGeometry implements TemplateModule {
   private midSmooth = 0;
   private trebleSmooth = 0;
   private ampSmooth = 0;
+  private onsetRotDir = 1;
+  private rotOffset = 0;
 
   private _generateSacredPoints(): { positions: Float32Array; layers: Float32Array } {
     const pos = new Float32Array(NODE_COUNT * 3);
@@ -231,10 +233,9 @@ class SacredGeometry implements TemplateModule {
     this.trebleSmooth += (treble - this.trebleSmooth) * 0.15;
     this.ampSmooth += (amp - this.ampSmooth) * 0.1;
 
-    const bassAccel = bass - this.bassPrev;
-    this.bassPrev = bass;
-    if (bassAccel > 0.12) this.kickAccum = Math.min(this.kickAccum + bassAccel * 2, 1);
-    this.kickAccum *= 0.92;
+    // Onset: snap rotation direction — punchy, glitch-like reversal
+    if (frame.onset) this.onsetRotDir *= -1;
+    this.rotOffset += delta * 0.03 * this.onsetRotDir;
 
     const evolve = Number(params.evolve ?? 0.5);
     const glow = Number(params.glow ?? 0.7);
@@ -282,7 +283,7 @@ class SacredGeometry implements TemplateModule {
         dz = newZ - bz + this.trebleSmooth * Math.sin(phase + t * 4) * 0.2;
       } else if (layer === 3) {
         // Outer rings pulse outward on kicks
-        const expansion = 1 + this.kickAccum * 0.5 + this.ampSmooth * 0.1;
+        const expansion = 1 + frame.kickIntensity * 0.5 + this.ampSmooth * 0.1;
         dx = bx * (expansion - 1);
         dy = by * (expansion - 1);
         dz = Math.sin(angle * 6 + t * 3) * this.trebleSmooth * 0.15;
@@ -343,10 +344,10 @@ class SacredGeometry implements TemplateModule {
     const connMat = this.connections.material as THREE.LineBasicMaterial;
     connMat.opacity = 0.15 + this.ampSmooth * 0.4;
 
-    // Global rotation
+    // Global rotation — onsetRotDir controls direction of z rotation
     const group = [this.particles, this.connections];
     for (const obj of group) {
-      obj.rotation.z = t * 0.03 + this.bassSmooth * 0.1;
+      obj.rotation.z = this.rotOffset + this.bassSmooth * 0.1;
       obj.rotation.x = Math.sin(t * 0.1) * 0.15 + this.midSmooth * 0.1;
     }
   }
